@@ -1,0 +1,14 @@
+{
+  "name": "derom-devnet",
+  "version": "0.1.0-dev.1",
+  "private": true,
+  "description": "Experimental SHA-256 ASIC solo-mining development chain",
+  "license": "Unlicense",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/consensus.test.js"
+  }
+}

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b1017" />
+  <title>DeroM — Solo mining, made clear</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="forms.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="DeroM home"><span class="brand-mark">D</span><span>derom<span class="brand-dot">.</span></span></a>
+      <div class="network-pill" id="networkPill"><i></i> DEVNET · LOCAL</div>
+      <nav aria-label="Main navigation">
+        <p class="nav-label">WORKSPACE</p>
+        <a class="nav-item active" href="#overview"><span class="nav-icon">◫</span> Overview</a>
+        <a class="nav-item" href="#wallet"><span class="nav-icon">◈</span> Wallet</a>
+        <a class="nav-item" href="#mining"><span class="nav-icon">⌁</span> Solo mining</a>
+        <a class="nav-item" href="#network"><span class="nav-icon">◎</span> Network</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="node-card"><span class="node-icon">◉</span><div><b id="nodeLabel">Node not running</b><small id="nodeDetail">Start the local node</small></div><span class="status-dot" id="nodeDot"></span></div>
+        <div class="profile"><div class="avatar">D</div><div><b>Local workspace</b><small>Preview environment</small></div><span class="more">···</span></div>
+      </div>
+    </aside>
+
+    <main id="overview">
+      <header class="topbar"><div class="crumb">Workspace <span>/</span> Overview</div><div class="top-actions"><span class="test-badge">LOCAL DEVELOPMENT NETWORK</span><button class="icon-button" aria-label="Notifications">♧<i></i></button><div class="avatar small">D</div></div></header>
+      <section class="welcome"><div><div class="eyebrow"><span class="spark">✳</span> YOUR NODE. YOUR RULES.</div><h1>Good to see you<span class="lime">.</span></h1><p>A calm command center for mining DeroM on your own hardware.</p></div><button class="button primary" id="createWallet"><span>＋</span> Create wallet</button></section>
+
+      <section class="stats-grid" aria-label="Wallet and network summary">
+        <article class="stat-card balance-card"><div class="card-top"><span>WALLET BALANCE</span><span class="tiny-icon">◈</span></div><div class="balance-line"><strong id="balance">0.00</strong><span>DERM</span></div><div class="subtle">Confirmed coinbase rewards <b id="balanceNote">0.00 DERM</b></div><div class="chart" aria-hidden="true"><svg viewBox="0 0 600 76" preserveAspectRatio="none"><path d="M0 51 H600" fill="none" stroke="#b7f36a" stroke-width="2" stroke-dasharray="3 7" opacity=".55" vector-effect="non-scaling-stroke"/></svg></div></article>
+        <article class="stat-card"><div class="card-top"><span>NETWORK HEIGHT</span><span class="tiny-icon">⌁</span></div><div class="stat-main"><span id="height">—</span> <small>blocks</small></div><div class="metric-foot" id="heightHint"><span class="muted-dot"></span> Waiting for local node</div></article>
+        <article class="stat-card"><div class="card-top"><span>CONNECTED MINERS</span><span class="tiny-icon">⌘</span></div><div class="stat-main"><span id="miners">—</span> <small>ASICs</small></div><div class="metric-foot" id="minerHint"><span class="muted-dot"></span> No node data yet</div></article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel wallet-panel" id="wallet"><div class="panel-heading"><div><span class="eyebrow">YOUR DERM</span><h2>Wallet</h2></div><button class="text-button" id="copyAddress" disabled>Copy address <span>↗</span></button></div><div class="wallet-empty" id="walletEmpty"><div class="empty-symbol">◈</div><h3>Create a DeroM wallet</h3><p>Generate a secp256k1 key locally and encrypt its backup with your passphrase.</p><button class="button secondary" id="createWalletSecondary">Create wallet <span>→</span></button></div><div class="wallet-created hidden" id="walletCreated"><div class="wallet-address-label">DEROM DEVNET ADDRESS <button id="copyAddressInline">Copy</button></div><div class="address-box" id="addressText"></div><div class="wallet-note"><span>ⓘ</span> Keep your encrypted backup and passphrase safe. Wallet creation does not enable sending yet.</div><div class="wallet-actions"><button class="button secondary" id="backupBtn">Download encrypted backup</button><button class="button quiet" id="refreshBalance">Refresh balance <span>↻</span></button></div></div></article>
+        <article class="panel mining-panel" id="mining"><div class="panel-heading"><div><span class="eyebrow">POINT YOUR ASIC</span><h2>Solo mining</h2></div><span class="live-label"><i></i> SELF-HOSTED</span></div><p class="panel-copy" id="shareDescription">Mine directly against this node. Use your DeroM address as the worker name. Stratum shares are accepted at difficulty 1,000 or higher; only network-valid solutions become coinbase rewards.</p><div class="connection-block"><div class="connection-row"><span>STRATUM V1 ENDPOINT</span><button id="copyEndpoint">Copy</button></div><code id="endpoint">stratum+tcp://127.0.0.1:3333</code><div class="connection-help" id="endpointHelp">Run the local node to enable mining</div></div><div class="miner-fields"><div><span>WORKER</span><code>DEROM_ADDRESS.worker1</code></div><div><span>PASSWORD</span><code>x</code></div><div><span>ALGORITHM</span><code>SHA-256d</code></div><div><span>MIN SHARE DIFFICULTY</span><code id="shareDifficulty">1,000</code></div></div><div class="mining-footer"><span id="minerStatus"><i class="muted-dot"></i> No miner connected</span><button class="button small-button" id="setupNode">Node setup <span>→</span></button></div></article>
+      </section>
+
+      <section class="panel activity-panel" id="network"><div class="panel-heading"><div><span class="eyebrow">RECENT EVENTS</span><h2>Network activity</h2></div><button class="text-button" id="refresh">Refresh <span>↻</span></button></div><div class="activity-empty"><div class="activity-orbit"><span>⌁</span></div><div><b>No network activity yet</b><p>Connect a DeroM node to see blocks, transactions and miner shares.</p></div><span class="activity-status"><i></i> Waiting for node</span></div></section>
+      <footer><span>DEROM <b>·</b> SOLO BY DESIGN</span><span>v0.1.0-dev.1 <b>·</b> No value assigned</span></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <dialog id="walletDialog"><form id="walletForm"><div class="dialog-top"><div class="brand-mark">D</div><button type="button" class="close-dialog" aria-label="Close">×</button></div><span class="eyebrow">NEW DEVNET WALLET</span><h2>Create your key</h2><p>A secp256k1 keypair will be generated by the local node. The private key is encrypted on disk; the passphrase is never stored.</p><label class="form-label" for="passphrase">Wallet passphrase</label><input id="passphrase" type="password" minlength="12" autocomplete="new-password" required placeholder="At least 12 characters"><label class="form-label" for="passphraseConfirm">Confirm passphrase</label><input id="passphraseConfirm" type="password" minlength="12" autocomplete="new-password" required placeholder="Enter it again"><div class="dialog-warning">If you lose both the passphrase and encrypted backup, the wallet cannot be recovered. DeroM is currently a development network and wallet sending is not implemented.</div><div class="dialog-error" id="walletError"></div><button class="button primary full" id="walletSubmit">Create encrypted wallet</button></form></dialog>
+  <dialog id="setupDialog"><div class="dialog-top"><div class="brand-mark">D</div><button class="close-dialog" aria-label="Close">×</button></div><span class="eyebrow">DEVELOPMENT NETWORK</span><h2>Self-hosted solo mining</h2><p>The node builds jobs directly from its local chain state. It has no pool accounts or share payouts. Difficulty adjusts toward one block every five minutes; after a fast block, the first few follow-up blocks may still arrive quickly as difficulty catches up.</p><div class="dialog-list"><div><span>01</span><p><b>Create a wallet</b><small>Use its DeroM address for miner authorization</small></p></div><div><span>02</span><p><b>Start the local node</b><small>Dashboard on 127.0.0.1:8080 · Stratum on port 3333</small></p></div><div><span>03</span><p><b>Configure your ASIC</b><small>SHA-256d, worker DEROM_ADDRESS.worker1, password x</small></p></div></div><div class="dialog-warning">This is a single-node development chain with no peer networking, no transaction sending, and no external security review. Do not treat rewards as money.</div><button class="button primary full close-action">Got it</button></dialog>
+  <script src="app.js"></script>
+</body>
+</html>

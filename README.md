@@ -1,0 +1,65 @@
+# DeroM solo-mining development network
+
+**Version:** `0.1.0-dev.1` · **License:** Unlicense · **Purpose:** an educational SHA-256 ASIC solo-mining experiment for home miners.
+
+This folder now contains a local single-node development chain, an encrypted secp256k1 wallet creator, a Stratum V1 TCP gateway for SHA-256d ASICs, and the dashboard UI. It can accept mining jobs and record found blocks on the local node.
+
+**This is an experimental development network, not a production cryptocurrency.** It has no peer-to-peer network, transaction sending, block maturity, TLS, external review, or interoperability testing across ASIC models. Difficulty adjusts toward the configured target, with a minimum network difficulty imposed by the Stratum share floor. It has no payment use case or assigned value. Do not use it for valuable funds or advertise it as a public coin.
+
+The source is organized as ordinary files in this repository; generated chain data, wallet files, and built executables are excluded from version control. See [CHANGELOG.md](CHANGELOG.md) for the single version history, [TOKENOMICS.md](TOKENOMICS.md) for issuance, and [POOL_REVIEW.md](POOL_REVIEW.md) for a pool operator's review brief. Consensus and cryptography tests run with `npm test`.
+
+## Start on Windows
+
+1. Install Node.js 20 or newer.
+2. Double-click `start.bat`.
+3. Open [http://127.0.0.1:8080](http://127.0.0.1:8080).
+4. Create a wallet. The node generates a real secp256k1 keypair, encrypts the private key with your passphrase, stores the encrypted wallet under `data/wallets`, and downloads an encrypted backup. Keep the backup and passphrase. The wallet passphrase is not saved.
+5. Point a SHA-256 ASIC on the same machine to `stratum+tcp://127.0.0.1:3333`, worker `YOUR_DEROM_ADDRESS.worker1`, password `x`.
+
+To allow an ASIC on your private LAN to connect, first stop the already-running `start.bat` node with Ctrl+C, then run `start-lan.bat` once. Both scripts use dashboard port 8080 and the same data directory, so they cannot run together. The Stratum service will bind to all network interfaces; the dashboard displays the first detected LAN IPv4 address. If the computer has multiple adapters, use the correct address shown by your operating system and set `DEROM_ADVERTISE_HOST` before launching if needed. Allow TCP port 3333 only on your private network in the host firewall. Stratum V1 here is unencrypted and has no separate pool account/password, so do not expose it to the public internet.
+
+## Block timing and pool configuration
+
+`derom.config.json` keeps the node's main connection settings together. The default `consensus.targetSpacingSeconds` is `300` (five minutes). Difficulty retargeting aims for that average; proof-of-work block times are random, so it cannot guarantee a block exactly every five minutes. A changed target applies when the node starts and can alter consensus behavior, so keep it fixed for any shared network. Environment variables such as `DEROM_TARGET_SPACING_SECONDS`, `DEROM_STRATUM_HOST`, and `DEROM_STRATUM_PORT` override the file for deployment scripts.
+
+The same `stratum` section provides a single place to configure the miner-facing listener, advertised address, and share difficulty. This makes endpoint settings easy to carry into a future pool adapter. Pool operation is not enabled today: the current service only counts valid shares in memory and finds solo blocks; it has no durable per-worker accounting or payouts, and the node has no template/submit RPC or peer network. A pool backend must be added and qualified before pool operators can point miners at DeroM. See `POOL_INTEGRATION.md` for the boundary and planned configuration seam.
+
+The app has no npm dependencies. The `data/` directory contains the chain and encrypted wallets; back it up while the node is stopped. Deleting it resets this local development network and its wallet files.
+
+## Mining protocol
+
+The gateway accepts Stratum V1 JSON-line messages: `mining.subscribe`, `mining.authorize`, and `mining.submit`. The miner authorization name is the DeroM address, optionally followed by `.worker`. Jobs use the network block target while `mining.set_difficulty` advertises the minimum share difficulty from `derom.config.json` (default 1,000). Valid shares meeting that threshold are acknowledged and counted in memory; only candidates meeting the current network target are recorded as blocks and notify miners of new work. There is no durable per-worker share ledger or pool payout system.
+
+Miner vendors vary in Stratum V1 byte-order handling, extensions and accepted difficulty ranges. This gateway has not been validated against a hardware ASIC yet. In particular, version rolling is not negotiated. Confirm a specific ASIC and firmware against a test chain before relying on it.
+
+## Wallet behavior
+
+The Windows wallet app is in `wallet-exe-standalone/DeroMWallet.exe`; its source and usage notes are in `wallet-app/`. It creates secp256k1 keys locally, encrypts the private key with PBKDF2-SHA256 and AES-256-GCM, and stores one active wallet under `%APPDATA%\DeroM`. It uses the same DeroM development-network Base58Check addresses as the node. Backups created by this app are restorable in this app. The app reads local node balance and height, but cannot send transactions because the chain has no transaction-signing or broadcast support. Dashboard-created scrypt backups are not compatible with this standalone wallet yet. Multiple wallet accounts, P2P synchronization, PPLNS payouts, and a full block explorer are not implemented.
+
+## Consensus values in this prototype
+
+| Parameter | Value | Implementation status |
+|---|---:|---|
+| Network | `derom-devnet` | Single local database; no peer networking |
+| Name / ticker | DeroM / DERM | Proposed; resolve project name conflict before release |
+| Maximum subsidy issuance | 100,000,000 DERM | Enforced by capping total recorded coinbase subsidy; final reward is reduced to remaining supply |
+| Starting block subsidy | 250 DERM | Implemented as a fixed subsidy until the cap; no halving |
+| Proof of work | SHA-256d | Implemented for block headers |
+| Target block spacing | 300 seconds | Per-block difficulty adjustment aims for five minutes on average; not a guaranteed schedule |
+| Difficulty | SHA-256d compact target | Retargets each block toward 300 seconds, limited to 4× change; network difficulty cannot fall below the configured 1,000 share floor |
+| Mining | Self-hosted solo work gateway | Stratum shares at minimum difficulty 1,000; no hosted pool, durable share ledger or payouts |
+| Stratum | Bitcoin-style Stratum V1 subset | No BIP 310 version rolling, TLS, or hardware qualification |
+
+Difficulty adjusts after each block toward a 300-second average using the median of up to 11 recent intervals, limited to a 4× adjustment per block. The network target is capped so it stays at least as hard as the configured minimum share difficulty; this also avoids ASIC firmware filtering valid block candidates before submission. Block times remain probabilistic. This single-node adjustment is provisional and is not a reviewed public-network difficulty algorithm. A public testnet/mainnet still needs a carefully chosen genesis block, reviewed retargeting, a complete canonical block/transaction format, P2P consensus and synchronization, transaction validation and mempool, wallet signing and recovery, block maturity, protocol audits, deterministic releases, and a tested difficulty/emission schedule.
+
+## Release blockers
+
+1. Replace the prototype per-block retarget with reviewed difficulty adjustment, timestamps, fork choice, genesis parameters and independent consensus test vectors.
+2. Implement and validate full transactions, UTXO accounting, signature verification, fees, mempool policy, reorgs, block maturity, wallet send/restore and multiple accounts.
+3. Add peer discovery and chain synchronization, then implement authenticated remote RPC, TLS or a secure network boundary, rate limiting and durable database migration. The HTTP API is currently restricted to loopback.
+4. Confirm ASIC interoperability across named devices and firmware; support relevant Stratum extensions and byte-order conventions.
+5. Commission independent cryptography and consensus review, verify reproducibility and sign release builds, and operate a public testnet before mainnet. The CI workflow currently pins the SDK and emits a checksum; this is not an independent reproducibility or security audit.
+6. Resolve the project name. DERO is already an established blockchain with its own coin and mining algorithm; “DeroM” could confuse users. Review the [official DERO project](https://docs.dero.io/) and choose a distinct name before public release.
+7. Ask NitroPool directly for its current listing requirements. This project has not been listed or reviewed by NitroPool.
+
+Protocol references: [Bitcoin Stratum V1 overview](https://en.bitcoin.it/wiki/Stratum_mining_protocol), [BIP 310 version-rolling extension](https://bitcoin.org/bip/310/), and [RandomX official description](https://github.com/tevador/RandomX). RandomX targets general-purpose CPUs and is not a fit for this ASIC-oriented SHA-256d proposal.

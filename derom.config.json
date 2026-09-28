@@ -1,0 +1,15 @@
+{
+  "consensus": {
+    "targetSpacingSeconds": 300
+  },
+  "http": {
+    "host": "127.0.0.1",
+    "port": 8080
+  },
+  "stratum": {
+    "listenHost": "127.0.0.1",
+    "port": 3333,
+    "advertiseHost": "",
+    "minimumShareDifficulty": 1000
+  }
+}
