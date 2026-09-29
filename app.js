@@ -56,7 +56,7 @@ async function refreshState() {
     document.querySelector('#height').textContent = nodeState.height.toLocaleString();
     document.querySelector('#heightHint').innerHTML = '<span class="muted-dot"></span> Local development chain';
     document.querySelector('#miners').textContent = nodeState.miners;
-    document.querySelector('#minerHint').innerHTML = `<span class="muted-dot"></span> ${nodeState.miners ? 'Mining connections active' : 'No ASIC has authorized'} · ${shareFloorLoaded ? `${Number(nodeState.acceptedShares || 0).toLocaleString()} shares accepted` : 'restart node to enable share counting'}`;
+    document.querySelector('#minerHint').innerHTML = `<span class="muted-dot"></span> ${nodeState.miners ? 'Mining connections active' : 'No ASIC has authorized'} · ${shareFloorLoaded ? `${Number(nodeState.acceptedShares || 0).toLocaleString()} accepted / ${Number(nodeState.rejectedShares || 0).toLocaleString()} rejected` : 'restart node to enable share counting'}`;
     document.querySelector('#endpoint').textContent = nodeState.stratum;
     document.querySelector('#endpointHelp').textContent = nodeState.miners
       ? `Connected · ${nodeState.network} · ${blockTarget} block target · ${shareFloorLoaded ? `min share diff ${minShareDiff.toLocaleString()}` : 'restart node to apply share floor'}`
