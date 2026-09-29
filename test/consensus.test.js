@@ -11,6 +11,7 @@ const {
   hash256,
   addressFromPubkey,
   b58decode,
+  notifyPrevHash,
   DIFF1_TARGET,
   POW_LIMIT,
   MIN_BLOCK_TARGET,
@@ -55,6 +56,15 @@ test('DeroM Base58Check addresses validate and reject a changed checksum', () =>
   assert.equal(b58decode(address).length, 20);
   const corrupt = address.slice(0, -1) + (address.at(-1) === '1' ? '2' : '1');
   assert.throws(() => b58decode(corrupt), /checksum|length/i);
+});
+
+test('mining.notify sends the standard display prevhash without word-swapping', () => {
+  const prevInternal = Buffer.from('0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20', 'hex');
+  const expected = Buffer.from(prevInternal).reverse().toString('hex');
+  assert.equal(notifyPrevHash({ prevInternal }), expected);
+  const wordSwapped = Buffer.from(Buffer.from(prevInternal).reverse());
+  for (let i = 0; i < 32; i += 4) wordSwapped.subarray(i, i + 4).reverse();
+  assert.notEqual(notifyPrevHash({ prevInternal }), wordSwapped.toString('hex'));
 });
 
 test('SHA-256d helper matches the empty-input reference vector', () => {
