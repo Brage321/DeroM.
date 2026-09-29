@@ -6,7 +6,7 @@ This folder now contains a local single-node development chain, an encrypted sec
 
 **This is an experimental development network, not a production cryptocurrency.** It has no peer-to-peer network, transaction sending, block maturity, TLS, external review, or interoperability testing across ASIC models. Difficulty adjusts toward the configured target, with a minimum network difficulty imposed by the Stratum share floor. It has no payment use case or assigned value. Do not use it for valuable funds or advertise it as a public coin.
 
-The source is organized as ordinary files in this repository; generated chain data, wallet files, and built executables are excluded from version control. See [CHANGELOG.md](CHANGELOG.md) for the single version history, [TOKENOMICS.md](TOKENOMICS.md) for issuance, and [POOL_REVIEW.md](POOL_REVIEW.md) for a pool operator's review brief. Consensus and cryptography tests run with `npm test`.
+The source is organized as ordinary files in this repository; generated chain data, wallet files, and built executables are excluded from version control. Start with [TRANSPARENCY.md](TRANSPARENCY.md) for review order and commit-history policy, then [SOURCE_MAP.md](SOURCE_MAP.md) for every tracked file/function/endpoint, then `docs/` for the full code walkthrough. See [CHANGELOG.md](CHANGELOG.md) for the single version history, [TOKENOMICS.md](TOKENOMICS.md) for issuance, and [POOL_REVIEW.md](POOL_REVIEW.md) for a pool operator's review brief. Consensus and cryptography tests run with `npm test`.
 
 ## Start on Windows
 
@@ -34,7 +34,7 @@ Miner vendors vary in Stratum V1 byte-order handling, extensions and accepted di
 
 ## Wallet behavior
 
-The Windows wallet app is in `wallet-exe-standalone/DeroMWallet.exe`; its source and usage notes are in `wallet-app/`. It creates secp256k1 keys locally, encrypts the private key with PBKDF2-SHA256 and AES-256-GCM, and stores one active wallet under `%APPDATA%\DeroM`. It uses the same DeroM development-network Base58Check addresses as the node. Backups created by this app are restorable in this app. The app reads local node balance and height, but cannot send transactions because the chain has no transaction-signing or broadcast support. Dashboard-created scrypt backups are not compatible with this standalone wallet yet. Multiple wallet accounts, P2P synchronization, PPLNS payouts, and a full block explorer are not implemented.
+The Windows wallet is built from source in `wallet-app/`; its usage notes are in `wallet-app/README.md`. It creates secp256k1 keys locally, encrypts the private key with PBKDF2-SHA256 and AES-256-GCM, and stores one active wallet under `%APPDATA%\DeroM`. It uses the same DeroM development-network Base58Check addresses as the node. Backups created by this app are restorable in this app. The app reads local node balance and height, but cannot send transactions because the chain has no transaction-signing or broadcast support. Dashboard-created scrypt backups are not compatible with this standalone wallet yet. Multiple wallet accounts, P2P synchronization, PPLNS payouts, and a full block explorer are not implemented.
 
 ## Consensus values in this prototype
 
