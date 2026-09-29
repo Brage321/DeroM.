@@ -58,6 +58,7 @@ const MIN_BLOCK_TARGET = DIFF1_TARGET / BigInt(MIN_SHARE_DIFFICULTY) < POW_LIMIT
   ? DIFF1_TARGET / BigInt(MIN_SHARE_DIFFICULTY)
   : POW_LIMIT;
 let acceptedShares = 0;
+let rejectedShares = 0;
 function targetDifficulty(bits) {
   return Number(DIFF1_TARGET) / Number(compactTarget(bits));
 }
@@ -276,7 +277,11 @@ function onSubmit(client, id, params) {
     send(client, id, true, null);
     for (const miner of miners) if (miner.authorized && !miner.destroyed) notifyJob(miner, true);
     console.log(`Block ${block.height} accepted: ${block.id} → ${block.address}`);
-  } catch (e) { send(client, id, null, { code: -1, message: e.message }); }
+  } catch (e) {
+    rejectedShares++;
+    console.log(`Share rejected (${params?.[0] || 'unknown worker'}): ${e.message}`);
+    send(client, id, null, { code: -1, message: e.message });
+  }
 }
 function stratumServer() {
   const server = net.createServer(socket => {
@@ -302,6 +307,7 @@ function stratumServer() {
             client.address = user; client.authorized = true; send(client, id, true, null); notifyJob(client, true);
           } catch { send(client, id, false, { code: 24, message: 'Invalid DeroM development address' }); }
         } else if (method === 'mining.submit') onSubmit(client, id, params);
+        else if (method === 'mining.configure') send(client, id, { 'version-rolling': false }, null);
         else if (method === 'mining.extranonce.subscribe') send(client, id, true, null);
         else if (method === 'mining.ping') send(client, id, true, null);
         else send(client, id, null, { code: 20, message: 'Unsupported Stratum method' });
@@ -336,7 +342,7 @@ async function api(req, res, url) {
   try {
     if (req.method === 'GET' && url.pathname === '/api/state') {
       const tip = chain[chain.length - 1];
-      return json(res, 200, { name: 'DeroM development chain', network: 'derom-devnet', height: tip.height, tip: tip.id, latest: tip.height ? tip : null, bits: tip.bits, nextBits: nextBits(chain).toString(16).padStart(8, '0'), targetSpacingSeconds: TARGET_SPACING_SECONDS, minimumShareDifficulty: MIN_SHARE_DIFFICULTY, acceptedShares, nextReward: blockSubsidy().toString(), issuedSupply: issuedSupply().toString(), maxSupply: MAX_SUPPLY.toString(), miners: [...miners].filter(m => m.authorized && !m.destroyed).length, stratum: `stratum+tcp://${ADVERTISE_HOST}:${STRATUM_PORT}`, status: 'development-only' });
+      return json(res, 200, { name: 'DeroM development chain', network: 'derom-devnet', height: tip.height, tip: tip.id, latest: tip.height ? tip : null, bits: tip.bits, nextBits: nextBits(chain).toString(16).padStart(8, '0'), targetSpacingSeconds: TARGET_SPACING_SECONDS, minimumShareDifficulty: MIN_SHARE_DIFFICULTY, acceptedShares, rejectedShares, nextReward: blockSubsidy().toString(), issuedSupply: issuedSupply().toString(), maxSupply: MAX_SUPPLY.toString(), miners: [...miners].filter(m => m.authorized && !m.destroyed).length, stratum: `stratum+tcp://${ADVERTISE_HOST}:${STRATUM_PORT}`, status: 'development-only' });
     }
     if (req.method === 'GET' && url.pathname === '/api/blocks') return json(res, 200, { blocks: chain.slice(-20).reverse() });
     if (req.method === 'GET' && url.pathname.startsWith('/api/balance/')) {
