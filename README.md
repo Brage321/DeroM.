@@ -28,7 +28,7 @@ The app has no npm dependencies. The `data/` directory contains the chain and en
 
 ## Mining protocol
 
-The gateway accepts Stratum V1 JSON-line messages: `mining.subscribe`, `mining.authorize`, and `mining.submit`. The miner authorization name is the DeroM address, optionally followed by `.worker`. Jobs use the network block target while `mining.set_difficulty` advertises the minimum share difficulty from `derom.config.json` (default 1,000). Valid shares meeting that threshold are acknowledged and counted in memory; only candidates meeting the current network target are recorded as blocks and notify miners of new work. There is no durable per-worker share ledger or pool payout system.
+The gateway accepts Stratum V1 JSON-line messages: `mining.subscribe`, `mining.configure` (answered with version-rolling disabled), `mining.authorize`, and `mining.submit`. The miner authorization name is the DeroM address, optionally followed by `.worker`. Jobs carry the current network block target while `mining.set_difficulty` advertises the separate share-submit threshold from `derom.config.json` (default 32). Valid shares meeting that threshold are acknowledged and counted in memory; only candidates meeting the current network target are recorded as blocks and notify miners of new work. There is no durable per-worker share ledger or pool payout system.
 
 Miner vendors vary in Stratum V1 byte-order handling, extensions and accepted difficulty ranges. This gateway has not been validated against a hardware ASIC yet. In particular, version rolling is not negotiated. Confirm a specific ASIC and firmware against a test chain before relying on it.
 
@@ -46,8 +46,8 @@ The Windows wallet is built from source in `wallet-app/`; its usage notes are in
 | Starting block subsidy | 250 DERM | Implemented as a fixed subsidy until the cap; no halving |
 | Proof of work | SHA-256d | Implemented for block headers |
 | Target block spacing | 300 seconds | Per-block difficulty adjustment aims for five minutes on average; not a guaranteed schedule |
-| Difficulty | SHA-256d compact target | Retargets each block toward 300 seconds, limited to 4× change; network difficulty cannot fall below the configured 1,000 share floor |
-| Mining | Self-hosted solo work gateway | Stratum shares at minimum difficulty 1,000; no hosted pool, durable share ledger or payouts |
+| Difficulty | SHA-256d compact target | Starts near the proof-of-work limit, then retargets each block toward 300 seconds, limited to 4× change; share submits use the separate configurable floor |
+| Mining | Self-hosted solo work gateway | Stratum shares at minimum difficulty 32; no hosted pool, durable share ledger or payouts |
 | Stratum | Bitcoin-style Stratum V1 subset | No BIP 310 version rolling, TLS, or hardware qualification |
 
 Difficulty adjusts after each block toward a 300-second average using the median of up to 11 recent intervals, limited to a 4× adjustment per block. The network target is capped so it stays at least as hard as the configured minimum share difficulty; this also avoids ASIC firmware filtering valid block candidates before submission. Block times remain probabilistic. This single-node adjustment is provisional and is not a reviewed public-network difficulty algorithm. A public testnet/mainnet still needs a carefully chosen genesis block, reviewed retargeting, a complete canonical block/transaction format, P2P consensus and synchronization, transaction validation and mempool, wallet signing and recovery, block maturity, protocol audits, deterministic releases, and a tested difficulty/emission schedule.
