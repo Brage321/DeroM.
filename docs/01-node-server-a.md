@@ -4,7 +4,6 @@
 wallet creation, Stratum mining gateway, and dashboard HTTP API.
 
 ## Config loading
-
 At startup it reads `derom.config.json` when present, then resolves each
 setting with `configured(env, fileValue, fallback)`. Environment variables
 override the file. Invalid spacing, share difficulty, ports, or a
@@ -73,7 +72,10 @@ private PEM with scrypt plus AES-256-GCM, and writes mode-`0600` JSON.
 3. `mining.authorize` takes `ADDRESS[.worker]`, validates the address, then
    `notifyJob()` sends difficulty and work.
 4. `nextJob()` snapshots tip, bits, reward, time, and random job ID.
-5. `mining.submit` calls `onSubmit()`, which checks worker/job freshness,
+5. `notifyPrevHash()` sends the standard display prevhash. It must not
+   word-swap; otherwise miners hash the wrong header and valid work is
+   rejected as low difficulty.
+6. `mining.submit` calls `onSubmit()`, which checks worker/job freshness,
    chain tip, timestamp window, duplicates, and share difficulty.
-6. Valid shares increment counters; network-valid solutions append a block,
+7. Valid shares increment counters; network-valid solutions append a block,
    persist the chain, acknowledge the miner, and notify all miners.

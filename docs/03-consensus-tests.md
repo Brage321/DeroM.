@@ -16,5 +16,8 @@ It imports live code from `../server.js`; there is no copied consensus.
 6. Address check: derives an address from the secp256k1 generator point,
    decodes to 20 bytes, then mutates the last character and expects a
    checksum/length error.
-7. Hash check: empty-input `hash256` equals the known SHA-256d vector, while
+7. Prevhash encoding: `notifyPrevHash()` returns the standard reversed
+   display hash and must not match the old per-word-swapped form. This is the
+   regression test for miners seeing mass “Low difficulty share” rejects.
+8. Hash check: empty-input `hash256` equals the known SHA-256d vector, while
    single SHA-256 equals the separate known empty digest.
