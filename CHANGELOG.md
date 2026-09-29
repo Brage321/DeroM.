@@ -2,6 +2,16 @@
 
 The source tree follows one version number from `package.json`: `0.1.0-dev.1`.
 
+## Unreleased — transparency docs
+
+- Added `TRANSPARENCY.md` with the canonical repository, review order,
+  per-change commit policy, untracked paths, and provenance note.
+- Added `SOURCE_MAP.md` listing every tracked file/function/endpoint.
+- Added `docs/` function-by-function walkthrough for node, dashboard,
+  tests, wallet, config, scripts, and CI.
+- Linked the new review docs from `README.md` and corrected the wallet
+  build description to source in `wallet-app/`.
+
 ## 0.1.0-dev.1 — development review snapshot
 
 - Consolidated the runnable Node.js development chain, dashboard, Stratum V1 solo listener, and Windows wallet sources into a directly browsable source tree.
