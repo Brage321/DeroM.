@@ -29,8 +29,9 @@ const VERSION = 0x20000000;
 const ADDRESS_VERSION = 0x35;
 const TARGET_SPACING_SECONDS = Number(configured('DEROM_TARGET_SPACING_SECONDS', fileConfig.consensus?.targetSpacingSeconds, 300));
 if (!Number.isInteger(TARGET_SPACING_SECONDS) || TARGET_SPACING_SECONDS < 30 || TARGET_SPACING_SECONDS > 86_400) throw new Error('Block target spacing must be a whole number from 30 to 86400 seconds.');
-const MIN_SHARE_DIFFICULTY = Number(configured('DEROM_MIN_SHARE_DIFFICULTY', fileConfig.stratum?.minimumShareDifficulty, 1000));
-if (!Number.isSafeInteger(MIN_SHARE_DIFFICULTY) || MIN_SHARE_DIFFICULTY < 1) throw new Error('Minimum share difficulty must be a positive whole number.');
+const DEFAULT_SHARE_DIFFICULTY = 32;
+const MIN_SHARE_DIFFICULTY = Number(configured('DEROM_MIN_SHARE_DIFFICULTY', fileConfig.stratum?.minimumShareDifficulty, DEFAULT_SHARE_DIFFICULTY));
+if (!Number.isSafeInteger(MIN_SHARE_DIFFICULTY) || MIN_SHARE_DIFFICULTY < 1 || MIN_SHARE_DIFFICULTY > 1000000) throw new Error('Minimum share difficulty must be a whole number from 1 to 1000000.');
 for (const [label, port] of [['HTTP', HTTP_PORT], ['Stratum', STRATUM_PORT]]) if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error(`${label} port must be between 1 and 65535.`);
 if (!['127.0.0.1', '::1', 'localhost'].includes(HTTP_HOST)) throw new Error('Unauthenticated dashboard/RPC must bind to loopback only. Keep http.host at 127.0.0.1 until RPC authentication is implemented.');
 const BLOCKS_FILE = path.join(DATA, 'blocks.json');
@@ -54,9 +55,12 @@ function compactTarget(bits) {
 }
 const POW_LIMIT = compactTarget(POW_LIMIT_BITS);
 const DIFF1_TARGET = compactTarget(0x1d00ffff);
-const MIN_BLOCK_TARGET = DIFF1_TARGET / BigInt(MIN_SHARE_DIFFICULTY) < POW_LIMIT
-  ? DIFF1_TARGET / BigInt(MIN_SHARE_DIFFICULTY)
-  : POW_LIMIT;
+// Shares and blocks use different targets on purpose. The share floor only
+// controls what the miner submits; the network target controls what becomes
+// a block. Never clamp the network target down to the share floor here —
+// that made every accepted share a block on a fresh chain. The 5-minute
+// retarget starts from POW_LIMIT and raises difficulty as blocks arrive.
+const MIN_BLOCK_TARGET = POW_LIMIT;
 let acceptedShares = 0;
 let rejectedShares = 0;
 function targetDifficulty(bits) {
@@ -107,9 +111,9 @@ function nextBits(activeChain = chain) {
   if (adjusted > maxAdjustment) adjusted = maxAdjustment;
   if (adjusted < 1n) adjusted = 1n;
   if (adjusted > POW_LIMIT) adjusted = POW_LIMIT;
-  // Keep network work at least as hard as the Stratum share floor so a valid
-  // share can never be discarded by miner firmware before it reaches the node.
-  if (adjusted > MIN_BLOCK_TARGET) adjusted = MIN_BLOCK_TARGET;
+  // Do NOT floor the network target at the share difficulty. The share floor
+  // is only a miner-submit threshold; blocks must be able to start near
+  // POW_LIMIT so a single Bitaxe finds blocks about every 5 minutes.
   return compactFromTarget(adjusted);
 }
 function b58encode(input) {
@@ -409,5 +413,6 @@ if (require.main === module) start().catch(error => { console.error(`DeroM start
 module.exports = {
   compactTarget, compactFromTarget, targetDifficulty, nextBits, hash256,
   addressFromPubkey, b58decode, notifyPrevHash, DIFF1_TARGET, POW_LIMIT,
-  MIN_BLOCK_TARGET, MIN_SHARE_DIFFICULTY, TARGET_SPACING_SECONDS
+  POW_LIMIT_BITS, MIN_BLOCK_TARGET, MIN_SHARE_DIFFICULTY,
+  TARGET_SPACING_SECONDS
 };
