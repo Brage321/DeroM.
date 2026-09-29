@@ -14,6 +14,7 @@ const {
   notifyPrevHash,
   DIFF1_TARGET,
   POW_LIMIT,
+  POW_LIMIT_BITS,
   MIN_BLOCK_TARGET,
   MIN_SHARE_DIFFICULTY
 } = require('../server.js');
@@ -24,25 +25,28 @@ test('compact target encodings round-trip for configured proof-of-work bounds', 
   }
 });
 
+test('network target starts near the proof-of-work limit, not the share floor', () => {
+  assert.equal(MIN_BLOCK_TARGET, POW_LIMIT);
+  assert.equal(compactFromTarget(POW_LIMIT), POW_LIMIT_BITS);
+});
+
 test('difficulty-one compact target has difficulty one', () => {
   assert.equal(targetDifficulty(0x1d00ffff), 1);
 });
 
-test('network target respects the configured minimum share difficulty', () => {
-  assert.equal(MIN_SHARE_DIFFICULTY, 1000);
-  assert.ok(MIN_BLOCK_TARGET <= POW_LIMIT);
-  assert.ok(DIFF1_TARGET / MIN_BLOCK_TARGET >= BigInt(MIN_SHARE_DIFFICULTY));
+test('default share floor is low enough for a single Bitaxe to submit', () => {
+  assert.equal(MIN_SHARE_DIFFICULTY, 32);
 });
 
 test('difficulty retarget uses the recent interval median to ignore one timestamp spike', () => {
-  const bits = compactFromTarget(MIN_BLOCK_TARGET);
+  const bits = POW_LIMIT_BITS;
   const blocks = Array.from({ length: 12 }, (_, height) => ({ height, time: height * 300, bits: bits.toString(16) }));
   blocks.push({ height: 12, time: blocks[11].time + 1, bits: bits.toString(16) });
   assert.equal(nextBits(blocks), bits);
 });
 
 test('difficulty falls quickly after a long stall so the chain can recover', () => {
-  const bits = compactFromTarget(MIN_BLOCK_TARGET);
+  const bits = POW_LIMIT_BITS;
   const blocks = Array.from({ length: 12 }, (_, height) => ({ height, time: height * 300, bits: bits.toString(16) }));
   const stalled = { height: 12, time: blocks[11].time + 3600, bits: bits.toString(16) };
   const recovered = nextBits([...blocks, stalled]);
