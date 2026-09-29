@@ -217,15 +217,21 @@ function nextJob(address, ex1) {
   const now = Math.max(Math.floor(Date.now() / 1000), tip.time + 1);
   return { id: crypto.randomBytes(8).toString('hex'), height, address, ex1, ex2size, reward, coinb1: cb.coinb1, coinb2: cb.coinb2, prevInternal, time: now, tip: tip.id, bits, version: VERSION };
 }
+function notifyPrevHash(job) {
+  // Standard Stratum V1: previous hash is sent as the display (big-endian)
+  // hex string. Do NOT byte-swap per 32-bit word here; the ASIC must hash
+  // the same previous block that the node reconstructs in buildCandidate().
+  // A word-swapped prevhash makes the miner work on a different header, so
+  // nearly every returned share misses the share target ("Low difficulty
+  // share") — and on a fresh chain the network target equals the share
+  // floor, so any share that passes also becomes a block.
+  return hex(reverse(job.prevInternal));
+}
 function notifyJob(client, clean = true) {
   const job = nextJob(client.address, Buffer.from(client.id, 'hex')); client.job = job;
   client.seenShares = new Set();
   send(client, null, 'mining.set_difficulty', [MIN_SHARE_DIFFICULTY]);
-  // SV1 Bitcoin ASIC convention: previous hash is displayed then byte-reversed per 32-bit word.
-  const displayedPrev = reverse(job.prevInternal);
-  const wordSwappedPrev = Buffer.from(displayedPrev);
-  for (let i = 0; i < 32; i += 4) wordSwappedPrev.subarray(i, i + 4).reverse();
-  send(client, null, 'mining.notify', [job.id, hex(wordSwappedPrev), hex(job.coinb1), hex(job.coinb2), [], job.version.toString(16).padStart(8, '0'), job.bits.toString(16).padStart(8, '0'), job.time.toString(16).padStart(8, '0'), clean]);
+  send(client, null, 'mining.notify', [job.id, notifyPrevHash(job), hex(job.coinb1), hex(job.coinb2), [], job.version.toString(16).padStart(8, '0'), job.bits.toString(16).padStart(8, '0'), job.time.toString(16).padStart(8, '0'), clean]);
 }
 function send(client, id, methodOrResult, paramsOrError) {
   if (client.destroyed) return;
@@ -255,11 +261,13 @@ function onSubmit(client, id, params) {
     if (candidate.time <= chain[chain.length - 1].time || candidate.time > Math.floor(Date.now() / 1000) + 7200) throw Error('Block timestamp is outside the allowed range');
     const shareKey = `${jobId}:${ex2}:${ntime}:${nonce}:${versionBits || ''}`;
     if (client.seenShares.has(shareKey)) throw Error('Duplicate share');
-    if (candidate.hashValue > DIFF1_TARGET / BigInt(MIN_SHARE_DIFFICULTY)) throw Error('Low difficulty share');
+    const shareTarget = DIFF1_TARGET / BigInt(MIN_SHARE_DIFFICULTY);
+    const networkTarget = compactTarget(job.bits);
+    if (candidate.hashValue > shareTarget) throw Error('Low difficulty share');
     client.seenShares.add(shareKey);
     client.acceptedShares++;
     acceptedShares++;
-    if (candidate.hashValue > compactTarget(job.bits)) {
+    if (candidate.hashValue > networkTarget) {
       send(client, id, true, null);
       return;
     }
@@ -394,6 +402,6 @@ if (require.main === module) start().catch(error => { console.error(`DeroM start
 
 module.exports = {
   compactTarget, compactFromTarget, targetDifficulty, nextBits, hash256,
-  addressFromPubkey, b58decode, DIFF1_TARGET, POW_LIMIT,
+  addressFromPubkey, b58decode, notifyPrevHash, DIFF1_TARGET, POW_LIMIT,
   MIN_BLOCK_TARGET, MIN_SHARE_DIFFICULTY, TARGET_SPACING_SECONDS
 };
