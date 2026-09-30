@@ -8,6 +8,8 @@ This folder now contains a local single-node development chain, an encrypted sec
 
 The source is organized as ordinary files in this repository; generated chain data, wallet files, and built executables are excluded from version control. Start with [TRANSPARENCY.md](TRANSPARENCY.md) for review order and commit-history policy, then [SOURCE_MAP.md](SOURCE_MAP.md) for every tracked file/function/endpoint, then `docs/` for the full code walkthrough. See [CHANGELOG.md](CHANGELOG.md) for the single version history, [TOKENOMICS.md](TOKENOMICS.md) for issuance, and [POOL_REVIEW.md](POOL_REVIEW.md) for a pool operator's review brief. Consensus and cryptography tests run with `npm test`.
 
+The same dashboard is published as a static demonstration page at [derom.surge.sh](http://derom.surge.sh). There is no backend there, so it always shows the offline node state and cannot create wallets; [docs/06-public-site.md](docs/06-public-site.md) records exactly what is deployed, how to re-deploy it, and what was verified.
+
 ## Start on Windows
 
 1. Install Node.js 20 or newer.

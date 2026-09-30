@@ -5,3 +5,5 @@
 - `03-consensus-tests.md` — `test/consensus.test.js`, every case.
 - `04-windows-wallet.md` — `wallet-app/Program.cs`, every class/method.
 - `05-config-scripts-ci.md` — config, launch scripts, CI, docs/policy.
+- `06-public-site.md` — what `derom.surge.sh` serves, how it is deployed, and what visitors see.
+

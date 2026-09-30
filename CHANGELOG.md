@@ -2,6 +2,23 @@
 
 The source tree follows one version number from `package.json`: `0.1.0-dev.1`.
 
+## Unreleased — public site published to Surge
+
+- `derom.surge.sh` now serves this repository's dashboard UI
+  (`index.html`, `styles.css`, `forms.css`, `app.js`) instead of the earlier
+  multi-page static site, whose `/explorer`, `/rich-list`, `/pools` and
+  `/connect` pages are no longer published.
+- Only those four files are uploaded. No chain data, wallet file, `server.js`,
+  key material or repository metadata is published, and `/.git/config` and
+  `/CNAME` return 404.
+- `app.js` calls its API with same-origin relative paths, so on a static host
+  `/api/state` has no backend and the published page renders the same offline
+  state as a stopped local node. It is a UI demonstration, not a live node;
+  wallet creation still requires a self-hosted node or the Windows wallet app.
+- Added `docs/06-public-site.md` with the exact deploy commands, the surge
+  `CNAME` behaviour to watch for on re-deploy, and the verification run
+  (all four files returned byte-identical to the repository copies).
+
 ## Unreleased — Bitaxe share compatibility (verified on hardware)
 
 A Bitaxe connected over the LAN had every share rejected as "Low difficulty

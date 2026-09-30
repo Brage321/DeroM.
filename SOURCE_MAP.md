@@ -121,6 +121,10 @@ activity panel, wallet/setup dialogs, app.js script, 12-char passphrase form.
 
 styles.css: layout/cards/panels. forms.css: dialogs/inputs/buttons.
 
+These four dashboard files (`index.html`, `styles.css`, `forms.css`, `app.js`)
+are also the entire public site at `derom.surge.sh`; `docs/06-public-site.md`
+covers the deploy command, the Surge `CNAME` quirk, and what was verified.
+
 ## Tests
 
 ### test/consensus.test.js — consensus/crypto suite
