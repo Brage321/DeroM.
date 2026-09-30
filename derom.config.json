@@ -1,6 +1,7 @@
 {
   "consensus": {
-    "targetSpacingSeconds": 300
+    "targetSpacingSeconds": 300,
+    "startDifficulty": 4096
   },
   "http": {
     "host": "127.0.0.1",

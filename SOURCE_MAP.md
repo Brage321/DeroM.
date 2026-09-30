@@ -35,8 +35,13 @@ Proof-of-work:
 - `compactFromTarget(target)` — BigInt target back to compact `bits`.
 - `targetDifficulty(bits)` — difficulty relative to difficulty-1.
 - `nextBits(activeChain = chain)` — per-block weighted retarget toward
-  `TARGET_SPACING_SECONDS`, clamped to 4x, bounded by `POW_LIMIT`, floored
-  at `MIN_BLOCK_TARGET`, with fast recovery after a long stall.
+  `TARGET_SPACING_SECONDS` (actual-over-expected ratio), clamped to 4x and
+  capped at `MAX_BLOCK_TARGET`, which keeps a block harder than a share.
+- `clampBlockTarget(target)` — enforces `1 <= target <= MAX_BLOCK_TARGET`.
+- `SHARE_TARGET` / `MAX_BLOCK_TARGET` — difficulty-1 divided by the share
+  floor; the easiest target a block may ever carry.
+- `START_DIFFICULTY` / `START_BLOCK_TARGET` — block difficulty of a brand-new
+  chain, always strictly above the share floor.
 
 Addresses/scripts:
 
@@ -54,13 +59,16 @@ Chain/wallet/supply:
 - pubkeyBytes(publicKey) — 65-byte uncompressed key from SPKI DER.
 - createWallet(passphrase) — secp256k1 keypair, scrypt plus AES-GCM, one file mode 0600.
 - issuedSupply() / blockSubsidy() — fixed 250 DERM until 100,000,000 cap.
-- createCoinbase(height, address, ex1, ex2, reward) — coinb1/coinb2/raw split.
+- createCoinbase(height, address, ex1, ex2, reward) — coinb1/coinb2/raw split; coinb1 ends before ex1 so the miner inserts both extranonces.
 - balance(address) — sums local coinbase rewards for one address.
 
 Mining/stratum:
 
 - nextJob(address, ex1) — next Stratum job from tip and fresh bits/reward.
 - notifyJob(client, clean) — set_difficulty then notify.
+- notifyPrevHash(job) / wordBytes(buffer) — prevhash in the per-word byte order ASIC firmware expects.
+- versionFor(job, suppliedVersionHex, versionMask) — merges BIP 310 rolled bits into the job version.
+
 - send(client, id, methodOrResult, paramsOrError) — JSON-line writer.
 - buildCandidate(job, ex2, time, nonce, version) — validates and rebuilds header/hash.
 - onSubmit(client, id, params) — rejects stale/duplicate/low-difficulty shares.
@@ -76,11 +84,12 @@ HTTP/dashboard:
 
 ### derom.config.json — node settings
 
-- consensus.targetSpacingSeconds — retarget goal; default 300.
+- consensus.targetSpacingSeconds / consensus.startDifficulty — retarget goal
+  and new-chain block difficulty; defaults 300 and 4096.
 - http.host / http.port — dashboard listener; host stays loopback.
 - stratum.listenHost / stratum.port — miner-facing TCP listener.
 - stratum.advertiseHost — displayed address; LAN IP when 0.0.0.0.
-- stratum.minimumShareDifficulty — share floor; default 1000.
+- stratum.minimumShareDifficulty — share floor; default 32.
 
 ### package.json — runtime/test metadata
 
@@ -116,9 +125,10 @@ styles.css: layout/cards/panels. forms.css: dialogs/inputs/buttons.
 
 ### test/consensus.test.js — consensus/crypto suite
 
-Live imports from ../server.js: compact round-trip, difficulty one,
-share floor 1000, spike resistance, stall recovery, address checksum,
-empty-input SHA-256d vector.
+Live imports from ../server.js: compact round-trip, share-versus-block target
+ordering, fresh-chain floor, share-is-not-a-block, difficulty one, steady
+spacing, fast-block hardening, stall recovery, 1.5 TH/s convergence,
+address checksum, ASIC prevhash byte order, coinb1/extranonce1 concatenation invariant, version-rolling merge, empty-input SHA-256d vector (15 tests).
 
 ## Windows wallet
 

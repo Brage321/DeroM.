@@ -1,6 +1,6 @@
 # Future pool integration
 
-The node currently supports self-hosted mining only. Its Stratum V1 listener advertises and counts shares at the configured minimum difficulty (32 by default), and separately accepts network blocks that start near the proof-of-work limit and retarget toward 5 minutes. It does not track durable per-worker shares, estimate worker hashrate, authenticate pool operators, or calculate pool payouts. A conventional pool cannot use this listener as a complete coin backend yet.
+The node currently supports self-hosted mining only. Its Stratum V1 listener advertises and counts shares at the configured minimum difficulty (32 by default), and separately requires a harder network target that starts at difficulty 4096 and retargets toward 5 minutes. It does not track durable per-worker shares, estimate worker hashrate, authenticate pool operators, or calculate pool payouts. A conventional pool cannot use this listener as a complete coin backend yet.
 
 The integration settings are grouped in `derom.config.json`:
 

@@ -46,11 +46,13 @@ async function refreshState() {
     const blockTarget = targetLabel(nodeState.targetSpacingSeconds || 300);
     const minShareDiff = Number(nodeState.minimumShareDifficulty);
     const shareFloorLoaded = Number.isSafeInteger(minShareDiff) && minShareDiff > 0;
+    const networkDifficulty = Number(nodeState.difficulty);
+    const difficultyText = Number.isFinite(networkDifficulty) && networkDifficulty > 0 ? networkDifficulty.toLocaleString() : null;
     document.querySelector('#shareDifficulty').textContent = shareFloorLoaded ? minShareDiff.toLocaleString() : 'Restart node to apply';
     document.querySelector('#shareDescription').textContent = shareFloorLoaded
-      ? `Mine directly against this node. Stratum accepts shares at difficulty ${minShareDiff.toLocaleString()} or higher; network-valid solutions become coinbase rewards.`
-      : 'This node is running an older version. Restart it to apply the 1,000 minimum share difficulty and share counter.';
-    document.querySelector('#nodeDetail').textContent = `${nodeState.network} · height ${nodeState.height} · ${blockTarget} target`;
+      ? `Mine directly against this node. Stratum accepts shares at difficulty ${minShareDiff.toLocaleString()} or higher; a block needs the harder network difficulty${difficultyText ? ` of ${difficultyText}` : ''}, so most shares are credit only.`
+      : 'This node is running an older version. Restart it to apply the current share floor, share counter, and block difficulty.';
+    document.querySelector('#nodeDetail').textContent = `${nodeState.network} · height ${nodeState.height} · block difficulty ${difficultyText || 'unknown'} · ${blockTarget} target`;
     document.querySelector('#nodeDot').style.background = '#b7f36a';
     document.querySelector('#networkPill').innerHTML = '<i></i> DEVNET · CONNECTED';
     document.querySelector('#height').textContent = nodeState.height.toLocaleString();

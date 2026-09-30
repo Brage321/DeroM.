@@ -11,7 +11,7 @@
 - `refreshBalance()` fetches `/api/balance/*`, converts atomic units using
   100,000,000 per DERM, and formats 2-8 decimals.
 - `refreshState()` fetches `/api/state`, updates node label/detail/dot,
-  height, miner count, share-difficulty display, endpoint help, miner status,
+  height, miner count, block difficulty, share-difficulty display, endpoint
   and latest-block activity. On fetch failure it renders the offline UI.
 - Wallet submit handler checks matching passphrases, disables the button
   while generating, calls `/api/wallet/create`, updates the wallet panel,

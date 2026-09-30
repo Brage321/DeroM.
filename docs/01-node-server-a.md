@@ -34,9 +34,10 @@ Important constants:
 - `compactTarget(bits)` expands compact difficulty to a target integer.
 - `compactFromTarget(target)` compresses a target back to `bits`.
 - `targetDifficulty(bits)` divides the difficulty-1 target by this target.
-- `nextBits(chain)` weights recent block intervals, clamps the adjustment to
-  4x, caps by `POW_LIMIT`, floors by `MIN_BLOCK_TARGET`, and drops difficulty
-  faster when the latest interval exceeds 3x the target spacing.
+- `nextBits(chain)` weights recent block intervals and scales the target by
+  the actual-over-expected ratio (fast blocks shrink the target = harder,
+  a stalled chain grows it = easier), limited to a 4x move per block. The
+  easier than `SHARE_TARGET`. A brand-new chain starts at the stricter of
 
 ## Address helpers
 
@@ -56,7 +57,8 @@ Important constants:
 - `saveChain()` writes through `blocks.json.tmp` then renames.
 - `issuedSupply()` sums recorded coinbase rewards.
 - `blockSubsidy()` returns 250 DERM, trims the final reward, then zero.
-- `createCoinbase(...)` splits the transaction into ASIC `coinb1`/`coinb2`.
+- `createCoinbase(...)` splits the transaction into `coinb1`/`coinb2`, stopping
+  `coinb1` before the pool extranonce so the miner can insert both extranonces.
 - `balance(address)` sums local rewards paid to one address.
 
 ## Wallet helper
@@ -71,10 +73,15 @@ private PEM with scrypt plus AES-256-GCM, and writes mode-`0600` JSON.
 2. `mining.subscribe` returns session IDs and extranonce size 4.
 3. `mining.authorize` takes `ADDRESS[.worker]`, validates the address, then
    `notifyJob()` sends difficulty and work.
-4. `nextJob()` snapshots tip, bits, reward, time, and random job ID.
-5. `notifyPrevHash()` sends the standard display prevhash. It must not
-   word-swap; otherwise miners hash the wrong header and valid work is
-   rejected as low difficulty.
+4. `nextJob()` snapshots tip, bits, reward, time, and random job ID. `coinb1`
+   ends before the pool extranonce, because the miner assembles
+   `coinb1 + extranonce1 + extranonce2 + coinb2` and `buildCandidate()` must
+   rebuild those exact bytes.
+5. `notifyPrevHash()` sends `wordBytes(prevInternal)`. ASIC firmware reverses
+   the bytes inside every 32-bit word of the notified prevhash, and the result
+   must be the node's internal previous hash. The plain display hash makes the
+   ASIC mine a different header, so every submit returns “Low difficulty
+   share” while the node measures about `1e-10`.
 6. `mining.submit` calls `onSubmit()`, which checks worker/job freshness,
    chain tip, timestamp window, duplicates, and share difficulty.
 7. Valid shares increment counters; network-valid solutions append a block,

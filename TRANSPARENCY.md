@@ -42,10 +42,13 @@ Example:
 ```text
 Add share-floor clamp to difficulty retarget
 
-- server.js: clamp nextBits() to MIN_BLOCK_TARGET.
-- test/consensus.test.js: assert share floor holds at 1,000.
+- server.js: cap nextBits() at MAX_BLOCK_TARGET so blocks stay harder than
+  shares, and start a fresh chain above the share floor.
 
-Verified: npm test (7/7 passing).
+- test/consensus.test.js: assert an accepted share is never automatically a
+  block, and that fast blocks harden rather than ease the chain.
+
+Verified: npm test (12/12 passing).
 ```
 
 ## What is intentionally untracked

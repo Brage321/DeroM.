@@ -4,7 +4,7 @@
 
 `derom.config.json` has three sections: `consensus.targetSpacingSeconds`
 (300), `http.host`/`http.port` (`127.0.0.1:8080`), and `stratum.listenHost`,
-`port`, `advertiseHost`, `minimumShareDifficulty` (`127.0.0.1:3333`, 1000).
+`port`, `advertiseHost`, `minimumShareDifficulty` (`127.0.0.1:3333`, 32).
 Env vars override file values; spacing changes alter consensus.
 
 ## Scripts
@@ -12,6 +12,9 @@ Env vars override file values; spacing changes alter consensus.
 - `start.bat` runs `node server.js` from its own directory.
 - `start-lan.bat` adds `DEROM_STRATUM_HOST=0.0.0.0` for LAN ASICs. Dashboard
   remains loopback-only. Neither script is for public-internet exposure.
+- `allow-stratum-firewall.bat` self-elevates and opens inbound TCP 3333, which
+  Windows blocks by default; without it an ASIC on another device cannot
+  connect even though the node listens on 0.0.0.0.
 
 ## CI
 

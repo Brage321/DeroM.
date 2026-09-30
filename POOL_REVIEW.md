@@ -9,7 +9,7 @@
 ## What is present
 
 - A single-process, local development chain with SHA-256d proof-of-work and a 300-second block-spacing target.
-- A Stratum V1 solo-mining listener on TCP port 3333. The default share difficulty is 32; valid shares are acknowledged and counted in memory, while only network-target solutions create blocks.
+- A Stratum V1 solo-mining listener on TCP port 3333. The default share difficulty is 32; valid shares are acknowledged and counted in memory, while only solutions meeting the harder network target create blocks. Windows blocks inbound TCP 3333 until `allow-stratum-firewall.bat` is run once as administrator.
 - A localhost-only HTTP dashboard/API on port 8080. Remote HTTP binding is rejected because RPC authentication is not implemented.
 - A Windows wallet that creates encrypted secp256k1 keys and reads balances from the local node.
 - A 250 DERM block subsidy, zero genesis premine, no halving, and a 100,000,000 DERM local coinbase-issuance cap. See [TOKENOMICS.md](TOKENOMICS.md).

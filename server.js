@@ -55,14 +55,40 @@ function compactTarget(bits) {
 }
 const POW_LIMIT = compactTarget(POW_LIMIT_BITS);
 const DIFF1_TARGET = compactTarget(0x1d00ffff);
-// Shares and blocks use different targets on purpose. The share floor only
-// controls what the miner submits; the network target controls what becomes
-// a block. Never clamp the network target down to the share floor here —
-// that made every accepted share a block on a fresh chain. The 5-minute
-// retarget starts from POW_LIMIT and raises difficulty as blocks arrive.
-const MIN_BLOCK_TARGET = POW_LIMIT;
+// Two different targets, and the ORDER between them is the whole game.
+// A target is inverted: numerically bigger means easier. So a share must carry
+// the larger (easier) threshold and a block the smaller (harder) one:
+//
+//     block target  <=  share target  <=  POW_LIMIT
+//
+// If the network target is ever allowed above the share target, every accepted
+// share automatically satisfies the network target too and instantly becomes a
+// block. That is exactly what happened while the chain sat at POW_LIMIT, which
+// is ~6.9e10 times easier than a difficulty-32 share.
+const SHARE_TARGET = DIFF1_TARGET / BigInt(MIN_SHARE_DIFFICULTY);
+const MAX_BLOCK_TARGET = SHARE_TARGET < POW_LIMIT ? SHARE_TARGET : POW_LIMIT;
+function clampBlockTarget(target) {
+  let value = target < 1n ? 1n : target;
+  if (value > MAX_BLOCK_TARGET) value = MAX_BLOCK_TARGET;
+  if (value > POW_LIMIT) value = POW_LIMIT;
+  return value;
+}
+// A fresh chain starts here rather than at the share floor, so the first blocks
+// are not minted one per second while the retarget calibrates to the miner.
+// The retarget moves away from this within a handful of blocks.
+const START_DIFFICULTY = Number(configured('DEROM_START_DIFFICULTY', fileConfig.consensus?.startDifficulty, 4096));
+if (!Number.isSafeInteger(START_DIFFICULTY) || START_DIFFICULTY <= MIN_SHARE_DIFFICULTY) throw new Error(`consensus.startDifficulty must be a whole number strictly above the share difficulty (${MIN_SHARE_DIFFICULTY}), otherwise every share would also be a block.`);
+const START_BLOCK_TARGET = clampBlockTarget(DIFF1_TARGET / BigInt(START_DIFFICULTY));
 let acceptedShares = 0;
 let rejectedShares = 0;
+const recentShares = [];
+function recordShare(entry) {
+  recentShares.unshift(entry);
+  if (recentShares.length > 12) recentShares.pop();
+}
+function shareDifficultyOf(hashValue) {
+  return Number(DIFF1_TARGET) / Number(hashValue);
+}
 function targetDifficulty(bits) {
   return Number(DIFF1_TARGET) / Number(compactTarget(bits));
 }
@@ -79,8 +105,11 @@ function compactFromTarget(value) {
 function nextBits(activeChain = chain) {
   const tip = activeChain[activeChain.length - 1];
   const currentBits = parseInt(tip.bits, 16) >>> 0;
-  const currentTarget = compactTarget(currentBits);
-  if (tip.height < 2) return compactFromTarget(MIN_BLOCK_TARGET < currentTarget ? MIN_BLOCK_TARGET : currentTarget);
+  const currentTarget = clampBlockTarget(compactTarget(currentBits));
+  if (tip.height < 2) {
+    const startTarget = START_BLOCK_TARGET < currentTarget ? START_BLOCK_TARGET : currentTarget;
+    return compactFromTarget(startTarget);
+  }
 
   const window = 12;
   const intervals = [];
@@ -98,23 +127,22 @@ function nextBits(activeChain = chain) {
   }
   const weightedAverage = weightTotal === 0n ? BigInt(TARGET_SPACING_SECONDS) : weightedTotal / weightTotal;
 
-  let adjusted = currentTarget * BigInt(TARGET_SPACING_SECONDS) / weightedAverage;
-  const latestInterval = Math.max(1, activeChain[activeChain.length - 1].time - activeChain[activeChain.length - 2].time);
-  if (latestInterval > TARGET_SPACING_SECONDS * 3) {
-    const recoveryTarget = currentTarget * BigInt(TARGET_SPACING_SECONDS) * 3n / BigInt(latestInterval);
-    if (recoveryTarget < adjusted) adjusted = recoveryTarget;
-  }
+  // Targets are inverted, so the ratio goes actual-over-expected. Blocks that
+  // arrive faster than TARGET_SPACING_SECONDS (weightedAverage < target) make
+  // the target SMALLER = harder; a stalled chain makes it BIGGER = easier.
+  // Multiplying the other way (expected-over-actual) makes the chain run away:
+  // fast blocks would make it easier, so difficulty could never rise.
+  const adjusted = currentTarget * weightedAverage / BigInt(TARGET_SPACING_SECONDS);
 
   const minAdjustment = currentTarget / 4n;
   const maxAdjustment = currentTarget * 4n;
-  if (adjusted < minAdjustment) adjusted = minAdjustment;
-  if (adjusted > maxAdjustment) adjusted = maxAdjustment;
-  if (adjusted < 1n) adjusted = 1n;
-  if (adjusted > POW_LIMIT) adjusted = POW_LIMIT;
-  // Do NOT floor the network target at the share difficulty. The share floor
-  // is only a miner-submit threshold; blocks must be able to start near
-  // POW_LIMIT so a single Bitaxe finds blocks about every 5 minutes.
-  return compactFromTarget(adjusted);
+  let target = adjusted;
+  if (target < minAdjustment) target = minAdjustment;
+  if (target > maxAdjustment) target = maxAdjustment;
+  // Hard ceiling: a block must always stay harder than a share, or every share
+  // would be a block. Hard floor: keep the number positive.
+  target = clampBlockTarget(target);
+  return compactFromTarget(target);
 }
 function b58encode(input) {
   const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -201,14 +229,21 @@ function createWallet(passphrase) {
 function issuedSupply() { return chain.reduce((sum, block) => sum + BigInt(block.reward || '0'), 0n); }
 function blockSubsidy() { const remaining = MAX_SUPPLY - issuedSupply(); return remaining > 0n ? (remaining < REWARD ? remaining : REWARD) : 0n; }
 function createCoinbase(height, address, ex1, ex2, reward = blockSubsidy()) {
-  const prefix = Buffer.concat([scriptNum(height), ex1]);
+  // Standard Stratum V1 assembly: the miner builds the transaction itself as
+  //   coinb1 + extranonce1 + extranonce2 + coinb2
+  // so coinb1 must stop BEFORE the pool extranonce. Embedding ex1 in coinb1
+  // made the ASIC's copy carry the extranonce twice and disagree with the
+  // input-script length byte, so the ASIC's merkle root never matched the one
+  // this node reconstructed and every share measured ~1e-10.
+  const heightPush = scriptNum(height);
   const suffix = Buffer.from('4465726f4d', 'hex');
-  const scriptLength = prefix.length + ex2.length + suffix.length;
+  const scriptLength = heightPush.length + ex1.length + ex2.length + suffix.length;
   const scriptPubKey = scriptForAddress(address);
-  const coinb1 = Buffer.concat([u32(1), Buffer.from([1]), Buffer.alloc(32, 0xff), Buffer.from('ffffffff', 'hex'), varInt(scriptLength), prefix]);
+  const coinb1 = Buffer.concat([u32(1), Buffer.from([1]), Buffer.alloc(32, 0xff), Buffer.from('ffffffff', 'hex'), varInt(scriptLength), heightPush]);
   const coinb2 = Buffer.concat([suffix, Buffer.from('ffffffff', 'hex'), Buffer.from([1]), u64(reward), varInt(scriptPubKey.length), scriptPubKey, u32(0)]);
-  const raw = Buffer.concat([coinb1, ex2, coinb2]);
-  // coinb1 + miner extranonce2 + coinb2 is the canonical full transaction.
+  const raw = Buffer.concat([coinb1, ex1, ex2, coinb2]);
+  // coinb1 + extranonce1 + miner extranonce2 + coinb2 is the canonical full
+  // transaction, byte for byte the same one an ASIC assembles from the job.
   return { coinb1, coinb2, raw };
 }
 function nextJob(address, ex1) {
@@ -222,15 +257,29 @@ function nextJob(address, ex1) {
   const now = Math.max(Math.floor(Date.now() / 1000), tip.time + 1);
   return { id: crypto.randomBytes(8).toString('hex'), height, address, ex1, ex2size, reward, coinb1: cb.coinb1, coinb2: cb.coinb2, prevInternal, time: now, tip: tip.id, bits, version: VERSION };
 }
+function wordBytes(input) {
+  // Reverses the bytes inside every 32-bit word. Deliberately does not touch
+  // `input`: Buffer.subarray() is a view, so .reverse() on it would rewrite the
+  // caller's buffer (e.g. job.prevInternal) in place.
+  const out = Buffer.alloc(input.length);
+  for (let i = 0; i + 3 < input.length; i += 4) {
+    out[i] = input[i + 3];
+    out[i + 1] = input[i + 2];
+    out[i + 2] = input[i + 1];
+    out[i + 3] = input[i];
+  }
+  for (let i = input.length - (input.length % 4); i < input.length; i++) out[i] = input[i];
+  return out;
+}
 function notifyPrevHash(job) {
-  // Standard Stratum V1: previous hash is sent as the display (big-endian)
-  // hex string. Do NOT byte-swap per 32-bit word here; the ASIC must hash
-  // the same previous block that the node reconstructs in buildCandidate().
-  // A word-swapped prevhash makes the miner work on a different header, so
-  // nearly every returned share misses the share target ("Low difficulty
-  // share") — and on a fresh chain the network target equals the share
-  // floor, so any share that passes also becomes a block.
-  return hex(reverse(job.prevInternal));
+  // Hardware-verified with a Bitaxe on the wire: the firmware byte-reverses
+  // every 32-bit word of the notified prevhash before hashing, so the job must
+  // carry the form that becomes the node's internal prevhash under that swap.
+  // Sending the plain display hash makes the ASIC mine a different header and
+  // every submit comes back as "Low difficulty share" (measured ~1e-10 instead
+  // of the few hundred the ASIC really found). The same shares measured
+  // 290-15700 once this ordering matched.
+  return hex(wordBytes(job.prevInternal));
 }
 function notifyJob(client, clean = true) {
   const job = nextJob(client.address, Buffer.from(client.id, 'hex')); client.job = job;
@@ -245,52 +294,98 @@ function send(client, id, methodOrResult, paramsOrError) {
     : { id, result: methodOrResult, error: paramsOrError || null };
   client.socket.write(JSON.stringify(message) + '\n');
 }
-function buildCandidate(job, ex2Hex, timeHex, nonceHex, suppliedVersionHex) {
+// Version rolling (BIP 310 style). Bitaxe / BM1366 firmware rolls bits inside
+// this mask and submits only the changed bits, even when a pool answers
+// mining.configure with version-rolling disabled. A submitted value that stays
+// inside the mask is therefore rolled bits to merge into the job version; a
+// value with bits outside the mask can only be a complete version field,
+// because those bits are not miner-changeable. Treating rolled bits as a whole
+// version field makes the node hash a different header than the ASIC, so every
+// share comes back as "Low difficulty share".
+const VERSION_ROLLING_MASK = 0x1fffe000;
+function versionFor(job, suppliedVersionHex, versionMask = 0) {
+  if (!suppliedVersionHex || !/^[0-9a-fA-F]{8}$/.test(suppliedVersionHex)) return job.version;
+  const supplied = parseInt(suppliedVersionHex, 16) >>> 0;
+  const mask = ((versionMask || VERSION_ROLLING_MASK) & VERSION_ROLLING_MASK) >>> 0;
+  if ((supplied & ~mask) === 0) return ((job.version & ~mask) | supplied) >>> 0;
+  return supplied;
+}
+function buildCandidate(job, ex2Hex, timeHex, nonceHex, suppliedVersionHex, versionMask = 0) {
   if (!/^[0-9a-fA-F]{8}$/.test(ex2Hex) || !/^[0-9a-fA-F]{8}$/.test(timeHex) || !/^[0-9a-fA-F]{8}$/.test(nonceHex)) throw Error('Malformed share fields');
   const ex2 = Buffer.from(ex2Hex, 'hex');
     const coinbase = createCoinbase(job.height, job.address, job.ex1, ex2, job.reward).raw;
   const txid = hash256(coinbase);
   const time = parseInt(timeHex, 16) >>> 0; const nonce = parseInt(nonceHex, 16) >>> 0;
-  const version = suppliedVersionHex && /^[0-9a-fA-F]{8}$/.test(suppliedVersionHex) ? parseInt(suppliedVersionHex, 16) >>> 0 : job.version;
+  const version = versionFor(job, suppliedVersionHex, versionMask);
   const header = headerFor(job.prevInternal, merkleRoot(coinbase), time, nonce, job.bits, version);
   const rawHash = hash256(header); const hashValue = BigInt('0x' + hex(reverse(rawHash)));
-  return { header, coinbase, rawHash, hashValue, time, nonce, txid };
+  return { header, coinbase, rawHash, hashValue, time, nonce, txid, version };
 }
 function onSubmit(client, id, params) {
+  const [worker, jobId, ex2, ntime, nonce, versionBits] = params || {};
+  let job = null;
+  let candidate = null;
+  // Keep a short ring of the last share attempts. A miner that believes it
+  // found difficulty 1000 while the node measures ~1e-14 is hashing a
+  // different header, which is how prevhash/coinbase mismatches show up.
+  const describe = (accepted, reason) => ({
+    accepted,
+    reason: reason || null,
+    worker: typeof worker === 'string' ? worker : null,
+    jobId: jobId || null,
+    extranonce2: ex2 || null,
+    ntime: ntime || null,
+    nonce: nonce || null,
+    versionBit: versionBits || null,
+    headerVersion: candidate ? candidate.version.toString(16).padStart(8, '0') : null,
+    hash: candidate ? displayHash(candidate.rawHash) : null,
+    measuredDifficulty: candidate ? shareDifficultyOf(candidate.hashValue) : null,
+    requiredShareDifficulty: MIN_SHARE_DIFFICULTY,
+    jobBits: job ? job.bits.toString(16).padStart(8, '0') : null,
+    // Enough of the job to rebuild the header elsewhere and compare byte for
+    // byte with whatever convention a given ASIC firmware actually uses.
+    job: job ? { id: job.id, height: job.height, prevhash: hex(reverse(job.prevInternal)), coinb1: hex(job.coinb1), coinb2: hex(job.coinb2), version: job.version.toString(16).padStart(8, '0'), bits: job.bits.toString(16).padStart(8, '0'), time: job.time, extranonce1: hex(job.ex1), extranonce2Size: job.ex2size, address: job.address } : null,
+    at: Math.floor(Date.now() / 1000)
+  });
   try {
-    const [worker, jobId, ex2, ntime, nonce, versionBits] = params;
     if (typeof worker !== 'string' || !worker.startsWith(client.address) || !client.job || jobId !== client.job.id) throw Error('Unknown worker or stale job');
-    const job = client.job;
+    job = client.job;
     if (job.tip !== chain[chain.length - 1].id) throw Error('Stale work');
-    const candidate = buildCandidate(job, ex2, ntime, nonce, versionBits);
+    candidate = buildCandidate(job, ex2, ntime, nonce, versionBits, client.versionMask);
     if (candidate.time <= chain[chain.length - 1].time || candidate.time > Math.floor(Date.now() / 1000) + 7200) throw Error('Block timestamp is outside the allowed range');
     const shareKey = `${jobId}:${ex2}:${ntime}:${nonce}:${versionBits || ''}`;
     if (client.seenShares.has(shareKey)) throw Error('Duplicate share');
-    const shareTarget = DIFF1_TARGET / BigInt(MIN_SHARE_DIFFICULTY);
-    const networkTarget = compactTarget(job.bits);
+    const shareTarget = SHARE_TARGET;
+    const networkTarget = clampBlockTarget(compactTarget(job.bits));
     if (candidate.hashValue > shareTarget) throw Error('Low difficulty share');
     client.seenShares.add(shareKey);
     client.acceptedShares++;
     acceptedShares++;
+    // Accepted share, and only this one branch can create a block: the hash
+    // must also clear the harder network target, not just the share target.
     if (candidate.hashValue > networkTarget) {
+      recordShare(describe(true, null));
       send(client, id, true, null);
       return;
     }
     const block = { height: job.height, id: displayHash(candidate.rawHash), prev: job.tip, time: candidate.time, bits: job.bits.toString(16).padStart(8, '0'), nonce: candidate.nonce, reward: job.reward.toString(), address: job.address, header: hex(candidate.header), coinbase: hex(candidate.coinbase), txid: displayHash(candidate.txid) };
     chain.push(block); saveChain();
+    recordShare(describe(true, 'block'));
     send(client, id, true, null);
     for (const miner of miners) if (miner.authorized && !miner.destroyed) notifyJob(miner, true);
     console.log(`Block ${block.height} accepted: ${block.id} → ${block.address}`);
   } catch (e) {
     rejectedShares++;
-    console.log(`Share rejected (${params?.[0] || 'unknown worker'}): ${e.message}`);
+    recordShare(describe(false, e.message));
+    const measured = candidate ? ` (node measured difficulty ${shareDifficultyOf(candidate.hashValue).toExponential(2)}, needed ${MIN_SHARE_DIFFICULTY})` : '';
+    console.log(`Share rejected (${typeof worker === 'string' ? worker : 'unknown worker'}): ${e.message}${measured}`);
     send(client, id, null, { code: -1, message: e.message });
   }
 }
 function stratumServer() {
   const server = net.createServer(socket => {
     socket.setNoDelay(true);
-    const client = { socket, buffer: '', id: crypto.randomBytes(4).toString('hex'), destroyed: false, authorized: false, acceptedShares: 0, seenShares: new Set() };
+    const client = { socket, buffer: '', id: crypto.randomBytes(4).toString('hex'), destroyed: false, authorized: false, acceptedShares: 0, versionMask: 0, seenShares: new Set() };
     miners.add(client);
     socket.on('close', () => { client.destroyed = true; miners.delete(client); });
     socket.on('error', () => { client.destroyed = true; miners.delete(client); });
@@ -311,7 +406,19 @@ function stratumServer() {
             client.address = user; client.authorized = true; send(client, id, true, null); notifyJob(client, true);
           } catch { send(client, id, false, { code: 24, message: 'Invalid DeroM development address' }); }
         } else if (method === 'mining.submit') onSubmit(client, id, params);
-        else if (method === 'mining.configure') send(client, id, { 'version-rolling': false }, null);
+        else if (method === 'mining.configure') {
+          // Negotiate version rolling instead of refusing it: firmware that is
+          // already rolling bits must get the agreed mask back, otherwise its
+          // shares can never be reproduced by this node.
+          const requested = Array.isArray(params) ? params[0] : params;
+          const wantsRolling = !!requested && requested['version-rolling'] === true;
+          const requestedMask = requested && typeof requested['version-rolling.mask'] === 'string' ? requested['version-rolling.mask'] : '';
+          const mask = wantsRolling && /^[0-9a-fA-F]{1,8}$/.test(requestedMask)
+            ? (parseInt(requestedMask, 16) & VERSION_ROLLING_MASK) >>> 0
+            : (wantsRolling ? VERSION_ROLLING_MASK : 0);
+          client.versionMask = mask;
+          send(client, id, mask ? { 'version-rolling': true, 'version-rolling.mask': mask.toString(16).padStart(8, '0') } : { 'version-rolling': false }, null);
+        }
         else if (method === 'mining.extranonce.subscribe') send(client, id, true, null);
         else if (method === 'mining.ping') send(client, id, true, null);
         else send(client, id, null, { code: 20, message: 'Unsupported Stratum method' });
@@ -346,9 +453,11 @@ async function api(req, res, url) {
   try {
     if (req.method === 'GET' && url.pathname === '/api/state') {
       const tip = chain[chain.length - 1];
-      return json(res, 200, { name: 'DeroM development chain', network: 'derom-devnet', height: tip.height, tip: tip.id, latest: tip.height ? tip : null, bits: tip.bits, nextBits: nextBits(chain).toString(16).padStart(8, '0'), targetSpacingSeconds: TARGET_SPACING_SECONDS, minimumShareDifficulty: MIN_SHARE_DIFFICULTY, acceptedShares, rejectedShares, nextReward: blockSubsidy().toString(), issuedSupply: issuedSupply().toString(), maxSupply: MAX_SUPPLY.toString(), miners: [...miners].filter(m => m.authorized && !m.destroyed).length, stratum: `stratum+tcp://${ADVERTISE_HOST}:${STRATUM_PORT}`, status: 'development-only' });
+      const upcoming = nextBits(chain);
+      return json(res, 200, { name: 'DeroM development chain', network: 'derom-devnet', height: tip.height, tip: tip.id, latest: tip.height ? tip : null, bits: tip.bits, nextBits: upcoming.toString(16).padStart(8, '0'), difficulty: Math.round(targetDifficulty(upcoming) * 100) / 100, targetSpacingSeconds: TARGET_SPACING_SECONDS, minimumShareDifficulty: MIN_SHARE_DIFFICULTY, startDifficulty: START_DIFFICULTY, acceptedShares, rejectedShares, nextReward: blockSubsidy().toString(), issuedSupply: issuedSupply().toString(), maxSupply: MAX_SUPPLY.toString(), miners: [...miners].filter(m => m.authorized && !m.destroyed).length, stratum: `stratum+tcp://${ADVERTISE_HOST}:${STRATUM_PORT}`, status: 'development-only' });
     }
     if (req.method === 'GET' && url.pathname === '/api/blocks') return json(res, 200, { blocks: chain.slice(-20).reverse() });
+    if (req.method === 'GET' && url.pathname === '/api/shares') return json(res, 200, { minimumShareDifficulty: MIN_SHARE_DIFFICULTY, blockDifficulty: Math.round(targetDifficulty(nextBits(chain)) * 100) / 100, acceptedShares, rejectedShares, recent: recentShares });
     if (req.method === 'GET' && url.pathname.startsWith('/api/balance/')) {
       const address = decodeURIComponent(url.pathname.slice('/api/balance/'.length)); scriptForAddress(address);
       return json(res, 200, { address, atomicUnits: balance(address) });
@@ -407,12 +516,15 @@ async function start() {
   console.log(`Development chain ready at height ${chain[chain.length - 1].height}; fixed 250 DERM subsidy until the 100,000,000 DERM issuance cap.`);
   console.log(`DeroM local dashboard: http://${HTTP_HOST}:${HTTP_PORT}`);
   console.log(`Stratum V1 listening on ${STRATUM_HOST}:${STRATUM_PORT}`);
+  console.log(`Shares must reach difficulty ${MIN_SHARE_DIFFICULTY}; the block target starts at difficulty ${START_DIFFICULTY} and retargets toward ${TARGET_SPACING_SECONDS}s spacing. Blocks are always harder than shares.`);
 }
 if (require.main === module) start().catch(error => { console.error(`DeroM startup failed: ${error.message}`); process.exitCode = 1; });
 
 module.exports = {
-  compactTarget, compactFromTarget, targetDifficulty, nextBits, hash256,
+  compactTarget, compactFromTarget, targetDifficulty, shareDifficultyOf, nextBits, hash256, createCoinbase,
   addressFromPubkey, b58decode, notifyPrevHash, DIFF1_TARGET, POW_LIMIT,
-  POW_LIMIT_BITS, MIN_BLOCK_TARGET, MIN_SHARE_DIFFICULTY,
+  POW_LIMIT_BITS, SHARE_TARGET, MAX_BLOCK_TARGET, clampBlockTarget,
+  versionFor, VERSION_ROLLING_MASK,
+  MIN_SHARE_DIFFICULTY, START_DIFFICULTY, START_BLOCK_TARGET,
   TARGET_SPACING_SECONDS
 };
